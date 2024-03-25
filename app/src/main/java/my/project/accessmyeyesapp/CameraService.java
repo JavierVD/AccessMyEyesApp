@@ -2,6 +2,7 @@ package my.project.accessmyeyesapp;
 
 import android.content.Context;
 import android.os.Handler;
+import android.util.Log;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -26,16 +27,8 @@ public class CameraService {
     }
     public void run(){
         try {
-            ServerSocket ss = new ServerSocket(mServerPort);
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mActivityInstance.serverStatus.setText("Listening on IP: " + mServerIP);
-                }
-            });
             while (true){
-                Socket s = ss.accept();
-                //socketList.add(ss);
+                Socket s = socket;
                 new Thread(new ServerSocketThread(s)).start();
             }
         }catch(Exception e){
@@ -45,13 +38,9 @@ public class CameraService {
 
     public class ServerSocketThread implements Runnable{
         Socket s = null;
-        // BufferedReader br = null;
-        //BufferedWriter bw = null;
         OutputStream os = null;
         public ServerSocketThread(Socket s) throws IOException {
             this.s = s;
-            //br = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            //bw = new BufferedWriter(new OutputStreamWriter(s.getOutputStream()));
         }
         @Override
         public void run() {
