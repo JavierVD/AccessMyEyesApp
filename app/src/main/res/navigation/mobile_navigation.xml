@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/nav_server_main">
+
+    <fragment
+        android:id="@+id/nav_server_main"
+        android:name="my.project.accessmyeyesapp.ui.server_fragment_main.ServerFragmentMain"
+        android:label="Alerta actual"
+        tools:layout="@layout/server_fragment_main" />
+
+    <fragment
+        android:id="@+id/nav_lista_alertas"
+        android:name="my.project.accessmyeyesapp.ui.server_fragment_list.ServerFragmentList"
+        android:label="Lista de alertas"
+        tools:layout="@layout/server_fragment_list" />
+
+    <fragment
+        android:id="@+id/nav_slideshow"
+        android:name="my.project.accessmyeyesapp.ui.slideshow.SlideshowFragment"
+        android:label="@string/menu_slideshow"
+        tools:layout="@layout/server_fragment_slideshow" />
+</navigation>

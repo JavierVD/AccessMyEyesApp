@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_server_main"
+            android:icon="@android:drawable/ic_menu_call"
+            android:title="Principal" />
+        <item
+            android:id="@+id/nav_lista_alertas"
+            android:icon="@android:drawable/ic_popup_reminder"
+            android:title="Alertas" />
+        <item
+            android:id="@+id/nav_cerrar"
+            android:icon="?attr/actionModeCloseDrawable"
+            android:title="Regresar" />
+    </group>
+</menu>
