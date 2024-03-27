@@ -8,6 +8,7 @@ import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.util.Log;
 import android.view.TextureView;
 
 import androidx.core.app.ActivityCompat;
@@ -41,10 +42,10 @@ public class AudioServer {
     }
 
     public void startStream() {
-
         new Thread(new Runnable() {
             @Override
             public void run() {
+                isStreaming = true;
 
                 if (ActivityCompat.checkSelfPermission(serverActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     return;
@@ -67,11 +68,15 @@ public class AudioServer {
     public void stopStream(){
 
         try {
-            audioRecord.stop();
-            audioRecord = null;
-            outputStream.close();
-            dos.close();
             isStreaming = false;
+
+            if(audioRecord != null)
+                audioRecord.stop();
+            audioRecord = null;
+            if(outputStream != null)
+                outputStream.close();
+            if(dos != null)
+                dos.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -90,16 +95,17 @@ public class AudioServer {
 
     private void sendAudioThrougSocket(Socket socket, byte[] audio) {
         try {
-            outputStream = socket.getOutputStream();
-            dos = new DataOutputStream(outputStream);
-            dos.writeInt(4);
-            dos.writeUTF("*@@*");
-            dos.writeInt(audio.length);
-            dos.writeUTF("(@@)");
-            dos.flush();
-            dos.write(audio);
-            dos.flush();
-
+            if(socket.isConnected()){
+                outputStream = socket.getOutputStream();
+                dos = new DataOutputStream(outputStream);
+                dos.writeInt(4);
+                dos.writeUTF("*@@*");
+                dos.writeInt(audio.length);
+                dos.writeUTF("(@@)");
+                dos.flush();
+                dos.write(audio);
+                dos.flush();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

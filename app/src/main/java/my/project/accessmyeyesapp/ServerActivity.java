@@ -233,6 +233,7 @@ public class ServerActivity extends AppCompatActivity {
                                             ServerThread serverThread = iterator.next();
                                             if (serverThread.getId().equals(idToRemove)) {
                                                 serverThread.stopTask();
+                                                audioServer.stopStream();
                                                 iterator.remove();
                                                 Log.d("REMOVED", "Process with ID " + idToRemove + " removed from the list");
                                                 break;

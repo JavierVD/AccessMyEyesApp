@@ -152,15 +152,18 @@ public class VideoClient {
 
     private void sendAudioThrougSocket(Socket socket, byte[] audio) {
         try {
-            outputStream = socket.getOutputStream();
-            dos = new DataOutputStream(outputStream);
-            dos.writeInt(4);
-            dos.writeUTF("*@@*");
-            dos.writeInt(audio.length);
-            dos.writeUTF("(@@)");
-            dos.flush();
-            dos.write(audio);
-            dos.flush();
+            if(socket != null && socket.isConnected()){
+                outputStream = socket.getOutputStream();
+                dos = new DataOutputStream(outputStream);
+                dos.writeInt(4);
+                dos.writeUTF("*@@*");
+                dos.writeInt(audio.length);
+                dos.writeUTF("(@@)");
+                dos.flush();
+                dos.write(audio);
+                dos.flush();
+            }
+
 
         } catch (IOException e) {
             e.printStackTrace();

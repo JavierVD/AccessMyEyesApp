@@ -332,7 +332,8 @@ public class ClientActivity extends AppCompatActivity {
                                     public void run() {
                                         iconStatus = 2;
                                         LottieAnimationView btnAccion = (LottieAnimationView) findViewById(R.id.btnEnviarSolicitud);
-                                        activarMicrofono();
+                                        solicitarPermisos();
+                                        //activarMicrofono();
                                         lblAccion = (TextView) findViewById(R.id.lblEjecucion);
                                         btnAccion.setAnimation(anims[iconStatus]);
                                         btnAccion.playAnimation();
@@ -345,20 +346,20 @@ public class ClientActivity extends AppCompatActivity {
                                         videoClient = new VideoClient(socket,cameraView,getClientActivity());
                                         videoClient.startStream();
                                         callThread = new CallThread(socket);
-                                        callThread.execute();
+                                        //callThread.startReceiving();
                                         }
                                     });
                                 }else if(_action.equals("close")){
-
+                                    if(callThread.isRunning){
+                                        callThread.stopTask();
+                                    }
                                     if(clientThread != null && clientThread.isRunning()){
                                         clientThread.stop();
                                     }
                                     if(socket != null && socket.isConnected()){
                                         socket.close();
                                     }
-                                    if(callThread.isRunning){
-                                        callThread.stopTask();
-                                    }
+
                                     Intent intent = new Intent(getApplicationContext(), LoginActivity.class);
                                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                                     startActivity(intent);
@@ -396,18 +397,18 @@ public class ClientActivity extends AppCompatActivity {
         }
     }
 
-    class CallThread extends AsyncTask<Void, String, Void> {
+    private class CallThread {
 
         private Socket clientSocket;
         private String _id;
         private boolean isRunning = false;
+
         public CallThread(Socket clientSocket) {
             this.clientSocket = clientSocket;
         }
 
         public void stopTask(){
             try {
-                cancel(true);
                 isRunning = false;
                 if(clientSocket.isConnected())
                     clientSocket.close();
@@ -417,65 +418,64 @@ public class ClientActivity extends AppCompatActivity {
             }
         }
 
-        public String getId(){
-            return this._id;
-        }
-        public Socket getSocket() {return this.clientSocket;}
+        public void startReceiving(){
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try (InputStream inputStream = clientSocket.getInputStream()) {
 
-        @Override
-        protected Void doInBackground(Void... params) {
-            try (InputStream inputStream = clientSocket.getInputStream()) {
+                        DataInputStream is = new DataInputStream(inputStream);
+                        isRunning = true;
+                        Log.d("RECIBIENDO I", "CLIENTE RECIBIENDO!");
+                        while (isRunning) {
+                            Log.d("RECIBIENDO I.1", "CLIENTE RECIBIENDO!");
+                            try {
+                                Log.d("RECIBIENDO I.2", "CLIENTE RECIBIENDO!");
+                                Log.d("RECIBIENDO int?", "em");
+                                int token = is.readInt();
+                                Log.d("RECIBIENDO int", String.valueOf(token));
 
-                DataInputStream is = new DataInputStream(inputStream);
-                isRunning = true;
-                while (isRunning) {
-                    try {
-                        int token = is.readInt();
-                        if (token == 4) {
-                            String header = is.readUTF();
-                            if (header.equals("*@@*")) {
-                                int audioLength = is.readInt();
-                                is.readUTF();
-                                byte[] buffers = new byte[audioLength];
-                                int len = 0;
-                                while (len < audioLength) {
-                                    len += is.read(buffers, len, audioLength - len);
-                                }
-                                getActivity().runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        if(audioTrack != null){
-                                            audioTrack.write(buffers, 0, buffers.length);
-                                            audioTrack.play();
+                                if (token == 4) {
+                                    Log.d("RECIBIENDO I.333", "CLIENTE RECIBIENDO!");
+                                    String header = is.readUTF();
+                                    if (header.equals("*@@*")) {
+                                        int audioLength = is.readInt();
+                                        is.readUTF();
+                                        byte[] buffers = new byte[audioLength];
+                                        int len = 0;
+                                        while (len < audioLength) {
+                                            len += is.read(buffers, len, audioLength - len);
                                         }
-
-                                        else
-                                            Log.e("AUDIO TRACK NOT FOUND","LOSED!");
+                                        getActivity().runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                Log.d("RECIBIENDO III", "CLIENTE RECIBIENDO!");
+                                                if(audioTrack != null){
+                                                    audioTrack.write(buffers, 0, buffers.length);
+                                                    audioTrack.play();
+                                                }
+                                                else
+                                                    Log.e("AUDIO TRACK NOT FOUND","LOSED!");
+                                            }
+                                        });
                                     }
-                                });
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
                             }
                         }
-                    } catch (Exception e) {
+
+                    }catch (IOException e) {
                         e.printStackTrace();
+                    } finally {
+                        try {
+                            clientSocket.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
-
-            }catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-
+            }).start();
         }
     }
 
@@ -496,34 +496,32 @@ public class ClientActivity extends AppCompatActivity {
                 MY_CAMERA_PERMISSION_CODE);
     }
 
+    private void solicitarPermisos() {
+        String[] permissions = {Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
+        ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
+    }
+
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                activarMic();
-            } else {
-                Toast.makeText(this, "El permiso para usar el micrófono fue denegado",
-                        Toast.LENGTH_SHORT).show();
+            if (grantResults.length > 0) {
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    activarMic();
+                } else {
+                    Toast.makeText(this, "El permiso para usar el micrófono fue denegado",
+                            Toast.LENGTH_SHORT).show();
+                }
+                if (grantResults.length > 1 && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
+
+                } else {
+                    Toast.makeText(this, "El permiso para usar la cámara fue denegado",
+                            Toast.LENGTH_SHORT).show();
+                }
             }
         }
     }
 
-    private CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice cameraDevice) {
-            _cameraDevice = cameraDevice;
-        }
-        @Override
-        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            _cameraDevice.close();
-        }
-        @Override
-        public void onError(@NonNull CameraDevice cameraDevice, int i) {
-            _cameraDevice.close();
-            _cameraDevice = null;
 
-        }
-    };
 
 }
