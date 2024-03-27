@@ -1,139 +1,79 @@
 package my.project.accessmyeyesapp;
 
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.media.AudioFormat;
-import android.media.AudioTrack;
-import android.media.MediaCodec;
-import android.media.MediaFormat;
-import android.media.MediaPlayer;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
-import android.view.Surface;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.widget.ImageView;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.io.InputStream;
 import java.net.Socket;
-import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class VideoServer {
-
-    private Socket socket;
-    private SurfaceView surfaceView;
+    private static final int SERVER_PORT = 8080;
+    private Socket clientSocket;
+    private InputStream inputStream;
     private Handler handler;
-    private MediaPlayer mediaPlayer; // Declare mediaPlayer outside threads
+    private ImageView imageView;
+    private ServerActivity serverActivity;
 
-    public VideoServer(Socket socket, SurfaceView surfaceView) {
-        this.socket = socket;
-        this.surfaceView = surfaceView;
-        this.handler = new Handler(surfaceView.getContext().getMainLooper());
-        this.mediaPlayer = new MediaPlayer(); // Initialize mediaPlayer here
+    public VideoServer(Socket socket, ImageView imageView) {
+        this.clientSocket = socket;
+        this.imageView = imageView;
+        this.handler = new Handler(new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                byte[] data = (byte[]) msg.obj;
+                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                imageView.setImageBitmap(bitmap);
+                Log.d("SETTED", "IMAGE SETTED");
+                imageView.setImageResource(R.drawable.enviar_datos);
+                return true;
+            }
+        });
+
     }
 
-    public void iniciarRecepcion() {
-        new Thread(() -> {
-            try (DataInputStream dis = new DataInputStream(socket.getInputStream())) {
-                while (true) {
-                    int bytesLeidos = dis.readInt();
-                    byte[] bytesImagen = new byte[bytesLeidos];
-                    dis.readFully(bytesImagen);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytesImagen, 0, bytesLeidos);
-                    handler.post(() -> {
-                        SurfaceHolder surfaceHolder = surfaceView.getHolder();
-                        if (surfaceHolder.getSurface().isValid()) {
-                            Canvas canvas = null;
-                            try {
-                                canvas = surfaceHolder.lockCanvas();
-                                if (canvas != null) {
-                                    if (bitmap != null) {
-                                        Log.d("BITMAP: ", String.valueOf(bitmap));
-                                        canvas.drawBitmap(bitmap, 0, 0,new Paint(3));
-                                    } else {
-                                        Log.e("BITMAP ERROR", "EL BITMAP ES NULL");
-                                    }
-                                }
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            } finally {
-                                if (canvas != null) {
-                                    surfaceHolder.unlockCanvasAndPost(canvas);
-                                }
+    public void startServer() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    inputStream = clientSocket.getInputStream();
+                    byte[] buffer = new byte[1024];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        byte[] imageData = Arrays.copyOf(buffer, bytesRead);
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
+                        serverActivity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                imageView.setImageBitmap(bitmap);
                             }
-                        }
-                    });
+                        });
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-
-        new Thread(() -> {
-            try (DataInputStream dis = new DataInputStream(socket.getInputStream())) {
-                // Create a buffer to hold received audio data
-                byte[] buffer = new byte[1024]; // Adjust buffer size as needed
-                int bytesRead;
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-                // Read audio data in chunks and store in a ByteArrayOutputStream
-                while ((bytesRead = dis.read(buffer)) != -1) {
-                    byteArrayOutputStream.write(buffer, 0, bytesRead);
-                }
-
-                // Get all received data as a byte array
-                byte[] audioData = byteArrayOutputStream.toByteArray();
-
-                // Create a temporary file to store the audio data
-                File tempAudioFile = File.createTempFile("audio", ".mp3"); // Adjust extension based on format
-                FileOutputStream fileOutputStream = new FileOutputStream(tempAudioFile);
-                fileOutputStream.write(audioData);
-                fileOutputStream.close();
-
-                // Get a FileDescriptor for the temporary file
-                FileDescriptor fileDescriptor = new FileInputStream(tempAudioFile).getFD();
-
-                if (mediaPlayer != null) { // Check if mediaPlayer is initialized
-                    mediaPlayer.setDataSource(fileDescriptor);
-                    mediaPlayer.prepareAsync(); // Prepare asynchronously to avoid blocking the thread
-
-                    mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                        @Override
-                        public void onPrepared(MediaPlayer mediaPlayer) {
-                            mediaPlayer.start(); // Start playback after preparation
-                        }
-                    });
-                } else {
-                    // Handle the case where mediaPlayer is not initialized (error or not created)
-                    Log.e("VideoServer", "mediaPlayer is not initialized for audio playback");
-                }
-
-                // Delete the temporary file after playback is complete (optional)
-                tempAudioFile.delete();
-
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }).start();
     }
 
-    public void detenerRecepcion() {
-        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-            mediaPlayer.stop();
-            mediaPlayer.release();
+
+    public void stopServer() {
+        try {
+            if (clientSocket != null) {
+                clientSocket.close();
+            }
+            if (inputStream != null) {
+                inputStream.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-        // Interrupt the video receiving thread (if applicable)
-        // You might need a flag or mechanism to signal the thread to stop
     }
-
 }

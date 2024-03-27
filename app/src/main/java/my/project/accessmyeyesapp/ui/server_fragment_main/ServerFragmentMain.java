@@ -1,5 +1,6 @@
 package my.project.accessmyeyesapp.ui.server_fragment_main;
 
+import android.media.Image;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -7,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -30,6 +32,7 @@ public class ServerFragmentMain extends Fragment {
     private static Handler handler;
     private static TextView lblIP;
     private SurfaceView videoView;
+    private ImageView imageView;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -45,8 +48,9 @@ public class ServerFragmentMain extends Fragment {
         lblUsuarioActual = root.findViewById(R.id.lblUsuarioActual);
         lblIP = root.findViewById(R.id.lblIP);
         lblTiempo = root.findViewById(R.id.lblTiempo);
+        imageView = root.findViewById(R.id.videoStreamer);
 
-        videoView = root.findViewById(R.id.videoViewer);
+        //videoView = root.findViewById(R.id.videoViewer);
         Log.e("SETTED AS", String.valueOf(videoView));
         if (args != null) {
             segundos = 0;
@@ -94,9 +98,9 @@ public class ServerFragmentMain extends Fragment {
         String tiempo = String.format("%02d:%02d", minutos, segundos);
         lblTiempo.setText(tiempo);
     }
-    public SurfaceView getVideoView() {
-        Log.d("ID", String.valueOf(videoView));
-        return videoView;
+    public ImageView getVideoView() {
+        Log.d("ID", String.valueOf(imageView));
+        return imageView;
     }
     public static void hang(){
 

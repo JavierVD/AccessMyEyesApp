@@ -2,6 +2,11 @@ package my.project.accessmyeyesapp;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.AudioFormat;
+import android.media.AudioManager;
+import android.media.AudioRecord;
+import android.media.AudioTrack;
+import android.media.Image;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
@@ -13,6 +18,7 @@ import android.view.MenuItem;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.google.android.material.navigation.NavigationView;
@@ -20,6 +26,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.WorkerThread;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -33,8 +40,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetAddress;
@@ -43,7 +52,9 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -65,10 +76,15 @@ public class ServerActivity extends AppCompatActivity {
     public NavController navController;
     ServerSocket serverSocket;
     Thread mainSocketThread;
+    AudioServer audioServer;
     public ConstraintLayout layout;
     private Boolean isRunning = true;
-    private VideoServer videoServer;
-    private SurfaceHolder surfaceHolder;
+    private AudioTrack audioTrack;
+    private static final int AUDIO_SAMPLE_RATE = 11025;
+    private static final int AUDIO_CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO;
+    private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+    private static final int AUDIO_BUFFER_SIZE = AudioRecord.getMinBufferSize(
+            AUDIO_SAMPLE_RATE, AUDIO_CHANNEL_CONFIG, AUDIO_FORMAT);
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,7 +107,10 @@ public class ServerActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
         NavigationUI.setupWithNavController(navigationView, navController);
         layout = findViewById(R.id.layoutFree);
-        Log.d("LOYOUT ?", String.valueOf(layout.getId()));
+        audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,AUDIO_SAMPLE_RATE, AUDIO_CHANNEL_CONFIG,
+                AUDIO_FORMAT, AUDIO_BUFFER_SIZE, AudioTrack.MODE_STREAM);
+
+
         navigationView.setNavigationItemSelectedListener(new NavigationView.OnNavigationItemSelectedListener() {
             @Override
             public boolean onNavigationItemSelected(@NonNull @NotNull MenuItem item) {
@@ -114,7 +133,7 @@ public class ServerActivity extends AppCompatActivity {
         listaAlertas = ServerFragmentList.listaAlertas;
 
         try {
-            serverSocket = new ServerSocket(12321);
+            serverSocket = new ServerSocket(SERVER_PORT);
             new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -207,12 +226,13 @@ public class ServerActivity extends AppCompatActivity {
 
                                             }
                                         });
+                                        audioServer.stopStream();
                                         String idToRemove = jsonObject.get("id").getAsString();
                                         Iterator<ServerThread> iterator = serverThreads.iterator();
                                         while (iterator.hasNext()) {
                                             ServerThread serverThread = iterator.next();
                                             if (serverThread.getId().equals(idToRemove)) {
-                                                serverThread.cancel(true);
+                                                serverThread.stopTask();
                                                 iterator.remove();
                                                 Log.d("REMOVED", "Process with ID " + idToRemove + " removed from the list");
                                                 break;
@@ -239,9 +259,9 @@ public class ServerActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-    private Bitmap base64ToBitmap(String imagenBase64) {
-        byte[] decodedString = Base64.decode(imagenBase64, Base64.DEFAULT);
-        return BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+
+    private ServerActivity getServerActivity(){
+        return this;
     }
 
     private PrintWriter output;
@@ -251,14 +271,26 @@ public class ServerActivity extends AppCompatActivity {
 
         private Socket clientSocket;
         private String _id;
-
+        private ImageView videoPreview;
+        private boolean isRunning = false;
         public ServerThread(Socket clientSocket, String id) {
             this.clientSocket = clientSocket;
             this._id = id;
         }
 
+        public void setVideoPreview(ImageView imageView){
+            this.videoPreview = imageView;
+        }
+
         public void stopTask(){
-            cancel(true);
+            try {
+                cancel(true);
+                isRunning = false;
+                if(clientSocket.isConnected())
+                    clientSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         public String getId(){
@@ -267,18 +299,62 @@ public class ServerActivity extends AppCompatActivity {
         public Socket getSocket() {return this.clientSocket;}
         @Override
         protected Void doInBackground(Void... params) {
-            /*try (BufferedReader dis = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
-            //try (DataInputStream dis = new DataInputStream(clientSocket.getInputStream())) {
-                while (true) {
-                    String imagenBase64 = dis.readLine();
-                    Log.d("IMAGE ?", imagenBase64);
+            try (InputStream inputStream = clientSocket.getInputStream()) {
 
-                    if (imagenBase64 != null) {
-                        Bitmap bitmap = base64ToBitmap(imagenBase64);
+                DataInputStream is = new DataInputStream(inputStream);
+                isRunning = true;
+                while (isRunning) {
+                    try {
+                        int token = is.readInt();
+                        if (token == 4) {
+                            String header = is.readUTF();
+                            if (header.equals("#@@#")) { //VIDEO
+                                int imgLength = is.readInt();
+                                is.readUTF();
+                                byte[] buffers = new byte[imgLength];
+                                int len = 0;
+                                while (len < imgLength) {
+                                    len += is.read(buffers, len, imgLength - len);
+                                }
+                                Bitmap bitmap = BitmapFactory.decodeByteArray(buffers, 0, buffers.length);
+                                getServerActivity().runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(videoPreview != null)
+                                            videoPreview.setImageBitmap(bitmap);
+                                        else
+                                            Log.e("VIDEOPREVIEW LOSED","LOSED!");
+                                    }
+                                });
+                            }else // AUDIO
+                            if (header.equals("*@@*")) {
+                                int audioLength = is.readInt();
+                                is.readUTF();
+                                byte[] buffers = new byte[audioLength];
+                                int len = 0;
+                                while (len < audioLength) {
+                                    len += is.read(buffers, len, audioLength - len);
+                                }
+                                getServerActivity().runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(audioTrack != null){
+                                            audioTrack.write(buffers, 0, buffers.length);
+                                            audioTrack.play();
+                                        }
+
+                                        else
+                                            Log.e("AUDIO TRACK NOT FOUND","LOSED!");
+                                    }
+                                });
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-
                 }
-            } catch (IOException e) {
+
+            }catch (IOException e) {
                 e.printStackTrace();
             } finally {
                 try {
@@ -286,8 +362,14 @@ public class ServerActivity extends AppCompatActivity {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            }*/
+            }
             return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+
         }
     }
 
@@ -356,11 +438,12 @@ public class ServerActivity extends AppCompatActivity {
                                 fragmentTransaction.replace(R.id.nav_host_fragment_content_main, fragment);
                                 fragmentTransaction.commit();
                                 fragmentManager.executePendingTransactions();
+                                ImageView imageView = fragment.getVideoView();
 
-                                if (fragment != null) {
-                                    SurfaceView surfaceView = fragment.getVideoView();
-                                    videoServer = new VideoServer(socket, surfaceView);
-                                    videoServer.iniciarRecepcion();
+                                if (imageView != null) {
+                                    serverThread.setVideoPreview(imageView);
+                                    audioServer = new AudioServer(socket,getServerActivity());
+                                    audioServer.startStream();
                                 } else {
                                     Log.e("ERROR FRAGMENT", "Error al obtener el fragmento ServerFragmentMain");
                                 }
@@ -381,31 +464,36 @@ public class ServerActivity extends AppCompatActivity {
         for (ServerThread serverThread : serverThreads) {
             Socket socket = serverThread.getSocket();
             try {
-                output = new PrintWriter(socket.getOutputStream(), true);
-                JsonObject _solicitudJson = new JsonObject();
-                _solicitudJson.addProperty("action", "close");
-                _solicitudJson.addProperty("id", serverThread.getId());
-                String _sSolicitudJson = _solicitudJson.toString();
-                output.println(_sSolicitudJson);
-                output.flush();
+                if(socket.isConnected()){
+                    output = new PrintWriter(socket.getOutputStream(), true);
+                    JsonObject _solicitudJson = new JsonObject();
+                    _solicitudJson.addProperty("action", "close");
+                    _solicitudJson.addProperty("id", serverThread.getId());
+                    String _sSolicitudJson = _solicitudJson.toString();
+                    output.println(_sSolicitudJson);
+                    output.flush();
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
-        for (ServerThread serverThread : serverThreads) {
+
             serverThread.stopTask();
         }
+
+        isRunning =false;
+
+
+
         try {
             serverSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
-        if(mainSocketThread.isAlive()){
+        if(mainSocketThread != null && mainSocketThread.isAlive()){
             mainSocketThread.interrupt();
         }
         serverThreads.clear();
         listaAlertas.clear();
-        isRunning =false;
     }
 
     @Override

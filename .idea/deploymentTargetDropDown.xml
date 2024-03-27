@@ -6,13 +6,24 @@
         <type value="RUNNING_DEVICE_TARGET" />
         <deviceKey>
           <Key>
-            <type value="SERIAL_NUMBER" />
-            <value value="82a3740b" />
+            <type value="VIRTUAL_DEVICE_PATH" />
+            <value value="C:\Users\black\.android\avd\PIXEL_6_II.avd" />
           </Key>
         </deviceKey>
       </Target>
     </runningDeviceTargetSelectedWithDropDown>
-    <timeTargetWasSelectedWithDropDown value="2024-03-24T23:40:20.443240400Z" />
+    <targetSelectedWithDropDown>
+      <Target>
+        <type value="QUICK_BOOT_TARGET" />
+        <deviceKey>
+          <Key>
+            <type value="VIRTUAL_DEVICE_PATH" />
+            <value value="C:\Users\black\.android\avd\PIXEL_6_II.avd" />
+          </Key>
+        </deviceKey>
+      </Target>
+    </targetSelectedWithDropDown>
+    <timeTargetWasSelectedWithDropDown value="2024-03-26T05:35:14.235792Z" />
     <multipleDevicesSelectedInDropDown value="true" />
     <runningDeviceTargetsSelectedWithDialog>
       <Target>
@@ -20,7 +31,7 @@
         <deviceKey>
           <Key>
             <type value="SERIAL_NUMBER" />
-            <value value="82a3740b" />
+            <value value="ZY226N8M7J" />
           </Key>
         </deviceKey>
       </Target>
@@ -29,7 +40,7 @@
         <deviceKey>
           <Key>
             <type value="SERIAL_NUMBER" />
-            <value value="R58N356S14E" />
+            <value value="82a3740b" />
           </Key>
         </deviceKey>
       </Target>
